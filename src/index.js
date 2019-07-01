@@ -1,9 +1,6 @@
-const url = require('url');
-const http = require('http');
-//var indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
+const r2 = require('r2');
 
 const serviceUrl = 'https://ec.europa.eu/taxation_customs/vies/services/checkVatService';
-const parsedUrl = url.parse(serviceUrl);
 
 const soapBodyTemplate = '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"\n  xmlns:tns1="urn:ec.europa.eu:taxud:vies:services:checkVat:types"\n  xmlns:impl="urn:ec.europa.eu:taxud:vies:services:checkVat">\n  <soap:Header>\n  </soap:Header>\n  <soap:Body>\n    <tns1:checkVat xmlns:tns1="urn:ec.europa.eu:taxud:vies:services:checkVat:types"\n     xmlns="urn:ec.europa.eu:taxud:vies:services:checkVat:types">\n     <tns1:countryCode>%COUNTRY_CODE%</tns1:countryCode>\n     <tns1:vatNumber>%VAT_NUMBER%</tns1:vatNumber>\n    </tns1:checkVat>\n  </soap:Body>\n</soap:Envelope>';
 
@@ -21,14 +18,13 @@ const ERROR_MSG = {
 };
 
 var headers = {
-  'Content-Type': 'application/x-www-form-urlencoded',
-  'User-Agent': 'soap node',
-  'Accept': 'text/html,application/xhtml+xml,application/xml,text/xml;q=0.9,*/*;q=0.8',
+  'Content-Type': 'application/xml',
+  'Accept': 'application/xml,text/xml',
   'Accept-Encoding': 'none',
   'Accept-Charset': 'utf-8',
   'Connection': 'close',
-  'Host': parsedUrl.hostname,
   'SOAPAction': 'urn:ec.europa.eu:taxud:vies:services:checkVat/checkVat',
+  'User-Agent': 'soap node',
 };
 
 function getReadableErrorMsg(faultstring) {
@@ -73,16 +69,15 @@ var vatIDRegexp = /^[A-Z]{2,2}[0-9A-Z]{2,13}$/;
 /**
  * @param vatID {string} VAT ID, starting with 2-letter country code, then the number,
  *     e.g. "DE1234567890"
- * @returns {Promise}
- * async function (you can `await` it)
+ * @param timeout {integer}   in ms
  * @returns {
  *   valid {boolean}   the VAT ID is OK
  *   serverValidated {boolean}   the ID was checked against the state server
  *   name {string},
  *   address {string},
- * };
+ * }
  */
-function validateVAT(vatID, timeout) {
+async function validateVAT(vatID, timeout) {
   var countryCode = vatID.substr(0, 2);
   var vatNumber = vatID.substr(2);
   if (EU_COUNTRIES_CODES.indexOf(countryCode) < 0) {
@@ -96,52 +91,33 @@ function validateVAT(vatID, timeout) {
       .replace('%COUNTRY_CODE%', countryCode)
       .replace('%VAT_NUMBER%', vatNumber)
       .replace('\n', '').trim();
-  headers['Content-Length'] = Buffer.byteLength(xml, 'utf8');
+  //headers['Content-Length'] = Buffer.byteLength(xml, 'utf8');
   var options = {
-    host: parsedUrl.host,
+    body: xml,
     method: 'POST',
-    path: parsedUrl.path,
     headers: headers,
-    family: 4,
+    // TODO family: 4,
+    // TODO timeout
   };
-  return new Promise((successCallback, errorCallback) => {
-    // TODO use r2
-    var req = http.request(options, res => {
-      var str = "";
-      res.setEncoding('utf8');
-      res.on('data', function(chunk) {
-        return str += chunk;
-      });
-      return res.on('end', () => {
-        try {
-          successCallback(parseSoapResponse(str));
-        } catch (ex) {
-          if (ex.code == "soap:Server") { // Source data server is down
-            // Avoid to block our customers just because the state can't keep its servers up
-            // Presume valid
-            successCallback({
-              countryCode,
-              vatNumber,
-              valid: true,
-              serverValidated: false,
-              name: '',
-              address: '',
-            });
-          }
-          errorCallback(ex);
-          return;
-        }
-      });
-    });
-    if (timeout) {
-      req.setTimeout(timeout, () => {
-        return req.abort();
-      });
+
+  var str = await r2(serviceUrl, options).text;
+  try {
+    return parseSoapResponse(str);
+  } catch (ex) {
+    if (ex.code == "soap:Server") { // Source data server is down
+      // Avoid to block our customers just because the state can't keep its servers up
+      // Presume valid
+      return {
+        countryCode,
+        vatNumber,
+        valid: true,
+        serverValidated: false,
+        name: '',
+        address: '',
+      };
     }
-    req.on('error', errorCallback);
-    req.write(xml);
-    req.end();
-  });
+    throw ex;
+  }
 };
 
 var exports;

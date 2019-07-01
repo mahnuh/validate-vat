@@ -3,7 +3,9 @@
   "version": "0.6.0",
   "description": "EU VAT number validation",
   "main": "src/index.js",
-  "dependencies": {},
+  "dependencies": {
+    "r2": "^2.0.1"
+  },
   "devDependencies": {},
   "repository": {
     "type": "git",
