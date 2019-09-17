@@ -74,6 +74,7 @@ function parseSoapResponse(soapMessage) {
     serverValidated: true,
     name: parseField('name'),
     address: parseField('address').replace(/\n/g, ', '),
+    requestDate: parseField('requestDate'),
   };
 };
 
