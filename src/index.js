@@ -43,15 +43,19 @@ function parseSoapResponse(soapMessage) {
   function parseField(field) {
     var regex = new RegExp("<" + field + ">\((\.|\\s)\*?\)</" + field + ">", 'gm');
     var match = regex.exec(soapMessage);
+
     if (!match) {
       let ex = new Error("Failed to parse field " + field);
       ex.soapMessage = soapMessage;
       throw ex;
     }
+
     var value = match[1].trim();
+    
     if (value == '---') {
       value = '';
     }
+
     return value;
   };
 
@@ -62,6 +66,7 @@ function parseSoapResponse(soapMessage) {
     ex.code = parseField('faultcode');
     throw ex;
   }
+
   return {
     countryCode: parseField('countryCode'),
     vatNumber: parseField('vatNumber'),
@@ -87,43 +92,44 @@ var vatIDRegexp = /^[A-Z]{2,2}[0-9A-Z]{2,13}$/;
  * };
  */
 function validateVAT(vatID, timeout) {
-  var countryCode = vatID.substr(0, 2);
-  var vatNumber = vatID.substr(2);
-  if (EU_COUNTRIES_CODES.indexOf(countryCode) < 0) {
-    //console.error("Country code " + countryCode + " is invalid");
-    throw new Error(ERROR_MSG['INVALID_INPUT_COUNTRY']);
-  }
-  if (!vatIDRegexp.test(vatID)) {
-    throw new Error(ERROR_MSG['INVALID_INPUT_NUMBER']);
-  }
-  var xml = soapBodyTemplate
-      .replace('%COUNTRY_CODE%', countryCode)
-      .replace('%VAT_NUMBER%', vatNumber)
-      .replace('\n', '').trim();
-  headers['Content-Length'] = Buffer.byteLength(xml, 'utf8');
-  var options = {
-    host: parsedUrl.host,
-    method: 'POST',
-    path: parsedUrl.path,
-    headers: headers,
-    family: 4,
-  };
-  return new Promise((successCallback, errorCallback) => {
-    // TODO use r2
+  return new Promise((resolve, reject) => {
+    var countryCode = vatID.substr(0, 2);
+    var vatNumber = vatID.substr(2);
+    if (EU_COUNTRIES_CODES.indexOf(countryCode) < 0) {
+      //console.error("Country code " + countryCode + " is invalid");
+      return reject({ message: ERROR_MSG['INVALID_INPUT_COUNTRY'] });
+    }
+
+    if (!vatIDRegexp.test(vatID)) {
+      return reject({ message: ERROR_MSG['INVALID_INPUT_NUMBER'] });
+    }
+
+    var xml = soapBodyTemplate.replace('%COUNTRY_CODE%', countryCode).replace('%VAT_NUMBER%', vatNumber).replace('\n', '').trim();
+
+    headers['Content-Length'] = Buffer.byteLength(xml, 'utf8');
+    var options = {
+      host: parsedUrl.host,
+      method: 'POST',
+      path: parsedUrl.path,
+      headers: headers,
+      family: 4,
+    };
+
     var req = http.request(options, res => {
       var str = "";
       res.setEncoding('utf8');
       res.on('data', function(chunk) {
         return str += chunk;
       });
+      
       return res.on('end', () => {
         try {
-          successCallback(parseSoapResponse(str));
+          resolve(parseSoapResponse(str));
         } catch (ex) {
           if (ex.code == "soap:Server") { // Source data server is down
             // Avoid to block our customers just because the state can't keep its servers up
             // Presume valid
-            successCallback({
+            return resolve({
               countryCode,
               vatNumber,
               valid: true,
@@ -131,10 +137,9 @@ function validateVAT(vatID, timeout) {
               name: '',
               address: '',
             });
-            return;
           }
-          errorCallback(ex);
-          return;
+
+          return reject(ex);
         }
       });
     });
@@ -143,7 +148,7 @@ function validateVAT(vatID, timeout) {
         return req.abort();
       });
     }
-    req.on('error', errorCallback);
+    req.on('error', reject);
     req.write(xml);
     req.end();
   });
