@@ -77,10 +77,10 @@ function parseSoapResponse(soapMessage) {
   };
 };
 
-var vatIDRegexp = /^[A-Z]{2,2}[0-9A-Z]{2,13}$/;
+var vatIdRegexp = /^[A-Z]{2,2}[0-9A-Z]{2,13}$/;
 
 /**
- * @param vatID {string} VAT ID, starting with 2-letter country code, then the number,
+ * @param vatId {string} VAT ID, starting with 2-letter country code, then the number,
  *     e.g. "DE1234567890"
  * @returns {Promise}
  * async function (you can `await` it)
@@ -91,18 +91,18 @@ var vatIDRegexp = /^[A-Z]{2,2}[0-9A-Z]{2,13}$/;
  *   address {string},
  * };
  */
-function validateVAT(vatID, timeout) {
-  vatID = vatID.replace(/\s/g, '');
-  
+function validateVAT(vatId, timeout) {
+  vatId = vatId.replace(/\s/g, '');
+
   return new Promise((resolve, reject) => {
-    var countryCode = vatID.substr(0, 2);
-    var vatNumber = vatID.substr(2);
+    var countryCode = vatId.substr(0, 2);
+    var vatNumber = vatId.substr(2);
     if (EU_COUNTRIES_CODES.indexOf(countryCode) < 0) {
       //console.error("Country code " + countryCode + " is invalid");
       return reject({ message: ERROR_MSG['INVALID_INPUT_COUNTRY'] });
     }
 
-    if (!vatIDRegexp.test(vatID)) {
+    if (!vatIdRegexp.test(vatId)) {
       return reject({ message: ERROR_MSG['INVALID_INPUT_NUMBER'] });
     }
 
