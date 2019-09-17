@@ -51,7 +51,7 @@ function parseSoapResponse(soapMessage) {
     }
 
     var value = match[1].trim();
-    
+
     if (value == '---') {
       value = '';
     }
@@ -92,6 +92,8 @@ var vatIDRegexp = /^[A-Z]{2,2}[0-9A-Z]{2,13}$/;
  * };
  */
 function validateVAT(vatID, timeout) {
+  vatID = vatID.replace(/\s/g, '');
+  
   return new Promise((resolve, reject) => {
     var countryCode = vatID.substr(0, 2);
     var vatNumber = vatID.substr(2);
